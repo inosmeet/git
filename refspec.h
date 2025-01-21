@@ -86,4 +86,12 @@ void query_refspecs_multiple(struct refspec *rs,
 				    struct refspec_item *query,
 				    struct string_list *results);
 
+/*
+ * Remove all entries in the input list which match any negative refspec in
+ * the refspec list.
+ */
+struct ref *apply_negative_refspecs(struct ref *ref_map, struct refspec *rs);
+
+char *apply_refspecs(struct refspec *rs, const char *name);
+
 #endif /* REFSPEC_H */
