@@ -12,7 +12,6 @@
 #include "gettext.h"
 #include "refspec.h"
 #include "run-command.h"
-#include "remote.h"
 #include "transport.h"
 #include "parse-options.h"
 #include "pkt-line.h"

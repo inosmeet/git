@@ -1,6 +1,8 @@
 #ifndef REFSPEC_H
 #define REFSPEC_H
 
+#include "string-list.h"
+
 #define TAG_REFSPEC "refs/tags/*:refs/tags/*"
 
 /**
@@ -78,5 +80,10 @@ void refspec_ref_prefixes(const struct refspec *rs,
 int omit_name_by_refspec(const char *name, struct refspec *rs);
 int match_name_with_pattern(const char *key, const char *name,
 				   const char *value, char **result);
+
+int query_refspecs(struct refspec *rs, struct refspec_item *query);
+void query_refspecs_multiple(struct refspec *rs,
+				    struct refspec_item *query,
+				    struct string_list *results);
 
 #endif /* REFSPEC_H */
