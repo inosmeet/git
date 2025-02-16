@@ -9,6 +9,7 @@
 #include "hex.h"
 #include "pretty.h"
 #include "refs.h"
+#include "revision.h"
 #include "color.h"
 #include "strvec.h"
 #include "object-name.h"
@@ -33,17 +34,24 @@ static int showbranch_use_color = -1;
 
 static struct strvec default_args = STRVEC_INIT;
 
-/*
- * TODO: convert this use of commit->object.flags to commit-slab
- * instead to store a pointer to ref name directly. Then use the same
- * UNINTERESTING definition from revision.h here.
- */
-#define UNINTERESTING	01
-
 #define REV_SHIFT	 2
 #define MAX_REVS	(FLAG_BITS - REV_SHIFT) /* should not exceed bits_per_int - REV_SHIFT */
 
 #define DEFAULT_REFLOG	4
+
+define_commit_slab(commit_flags, int);
+static struct commit_flags commit_flags;
+
+static int get_commit_flags(struct commit *commit)
+{
+	int *result = commit_flags_peek(&commit_flags, commit);
+	return result ? *result : 0;
+}
+
+static void set_commit_flags(struct commit *commit, int flags)
+{
+	*commit_flags_at(&commit_flags, commit) = flags;
+}
 
 static const char *get_color_code(int idx)
 {
@@ -64,7 +72,7 @@ static struct commit *interesting(struct commit_list *list)
 	while (list) {
 		struct commit *commit = list->item;
 		list = list->next;
-		if (commit->object.flags & UNINTERESTING)
+		if (get_commit_flags(commit) & UNINTERESTING)
 			continue;
 		return commit;
 	}
@@ -215,7 +223,7 @@ static void name_commits(struct commit_list *list,
 
 static int mark_seen(struct commit *commit, struct commit_list **seen_p)
 {
-	if (!commit->object.flags) {
+	if (!get_commit_flags(commit)) {
 		commit_list_insert(commit, seen_p);
 		return 1;
 	}
@@ -233,7 +241,7 @@ static void join_revs(struct commit_list **list_p,
 		struct commit_list *parents;
 		int still_interesting = !!interesting(*list_p);
 		struct commit *commit = pop_commit(list_p);
-		int flags = commit->object.flags & all_mask;
+		int flags = get_commit_flags(commit) & all_mask;
 
 		if (!still_interesting && extra <= 0)
 			break;
@@ -245,14 +253,14 @@ static void join_revs(struct commit_list **list_p,
 
 		while (parents) {
 			struct commit *p = parents->item;
-			int this_flag = p->object.flags;
+			int this_flag = get_commit_flags(p);
 			parents = parents->next;
 			if ((this_flag & flags) == flags)
 				continue;
 			repo_parse_commit(the_repository, p);
 			if (mark_seen(p, seen_p) && !still_interesting)
 				extra--;
-			p->object.flags |= flags;
+			set_commit_flags(p, get_commit_flags(p) | flags);
 			commit_list_insert_by_date(p, list_p);
 		}
 	}
@@ -271,8 +279,8 @@ static void join_revs(struct commit_list **list_p,
 			struct commit *c = s->item;
 			struct commit_list *parents;
 
-			if (((c->object.flags & all_revs) != all_revs) &&
-			    !(c->object.flags & UNINTERESTING))
+			if (((get_commit_flags(c) & all_revs) != all_revs) &&
+			    !(get_commit_flags(c) & UNINTERESTING))
 				continue;
 
 			/* The current commit is either a merge base or
@@ -285,8 +293,8 @@ static void join_revs(struct commit_list **list_p,
 			while (parents) {
 				struct commit *p = parents->item;
 				parents = parents->next;
-				if (!(p->object.flags & UNINTERESTING)) {
-					p->object.flags |= UNINTERESTING;
+				if (!(get_commit_flags(p) & UNINTERESTING)) {
+					set_commit_flags(p, get_commit_flags(p) | UNINTERESTING);
 					changed = 1;
 				}
 			}
@@ -513,12 +521,12 @@ static int show_merge_base(const struct commit_list *seen, int num_rev)
 
 	for (const struct commit_list *s = seen; s; s = s->next) {
 		struct commit *commit = s->item;
-		int flags = commit->object.flags & all_mask;
+		int flags = get_commit_flags(commit) & all_mask;
 		if (!(flags & UNINTERESTING) &&
 		    ((flags & all_revs) == all_revs)) {
 			puts(oid_to_hex(&commit->object.oid));
 			exit_status = 0;
-			commit->object.flags |= UNINTERESTING;
+			set_commit_flags(commit, get_commit_flags(commit) | UNINTERESTING);
 		}
 	}
 	return exit_status;
@@ -534,9 +542,9 @@ static int show_independent(struct commit **rev,
 		struct commit *commit = rev[i];
 		unsigned int flag = rev_mask[i];
 
-		if (commit->object.flags == flag)
+		if (get_commit_flags(commit) == flag)
 			puts(oid_to_hex(&commit->object.oid));
-		commit->object.flags |= UNINTERESTING;
+		set_commit_flags(commit, get_commit_flags(commit) | UNINTERESTING);
 	}
 	return 0;
 }
@@ -603,7 +611,7 @@ static int omit_in_dense(struct commit *commit, struct commit **rev, int n)
 	for (i = 0; i < n; i++)
 		if (rev[i] == commit)
 			return 0;
-	flag = commit->object.flags;
+	flag = get_commit_flags(commit);
 	for (i = count = 0; i < n; i++) {
 		if (flag & (1u << (i + REV_SHIFT)))
 			count++;
@@ -702,6 +710,7 @@ int cmd_show_branch(int ac,
 	int ret;
 
 	init_commit_name_slab(&name_slab);
+	init_commit_flags(&commit_flags);
 
 	git_config(git_show_branch_config, NULL);
 
@@ -877,13 +886,13 @@ int cmd_show_branch(int ac,
 		 * and so on.  REV_SHIFT bits from bit 0 are used for
 		 * internal bookkeeping.
 		 */
-		commit->object.flags |= flag;
-		if (commit->object.flags == flag)
+		set_commit_flags(commit, get_commit_flags(commit) | flag);
+		if (get_commit_flags(commit) == flag)
 			commit_list_insert_by_date(commit, &list);
 		rev[num_rev] = commit;
 	}
 	for (i = 0; i < num_rev; i++)
-		rev_mask[i] = rev[i]->object.flags;
+		rev_mask[i] = get_commit_flags(rev[i]);
 
 	if (0 <= extra)
 		join_revs(&list, &seen, num_rev, extra);
@@ -951,7 +960,7 @@ int cmd_show_branch(int ac,
 
 	for (struct commit_list *l = seen; l; l = l->next) {
 		struct commit *commit = l->item;
-		int this_flag = commit->object.flags;
+		int this_flag = get_commit_flags(commit);
 		int is_merge_point = ((this_flag & all_revs) == all_revs);
 
 		shown_merge_point |= is_merge_point;
