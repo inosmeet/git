@@ -6,12 +6,16 @@
 #include "refs.h"
 #include "strbuf.h"
 #include "worktree.h"
+#include "object-name.h"
 
 #define REFS_MIGRATE_USAGE \
 	N_("git refs migrate --ref-format=<format> [--no-reflog] [--dry-run]")
 
 #define REFS_VERIFY_USAGE \
 	N_("git refs verify [--strict] [--verbose]")
+
+#define REFS_LIST_USAGE \
+	N_("git refs list [--head] [--branches] [--tag]")
 
 static int cmd_refs_migrate(int argc, const char **argv, const char *prefix,
 			    struct repository *repo UNUSED)
@@ -101,6 +105,62 @@ static int cmd_refs_verify(int argc, const char **argv, const char *prefix,
 	return ret;
 }
 
+struct patterns_options {
+	int show_head;
+	int branches_only;
+	int tags_only;
+};
+
+static int show_ref(const char *refname, const char *referent UNUSED, const struct object_id *oid,
+		    int flag UNUSED, void *cbdata UNUSED)
+{
+	const char *hex;
+
+	hex = repo_find_unique_abbrev(the_repository, oid, 0);
+	printf("%s %s\n", hex, refname);
+
+	return 0;
+}
+
+static int cmd_refs_list(int argc, const char **argv, const char *prefix,
+			 struct repository *repo UNUSED)
+{
+	struct patterns_options patterns_opts = {0};
+	const char * const list_usage[] = {
+		REFS_LIST_USAGE,
+		NULL,
+	};
+	struct option options[] = {
+		OPT_BOOL(0, "head", &patterns_opts.show_head,
+		  N_("show the HEAD reference, even if it would be filtered out")),
+		OPT_BOOL(0, "tags", &patterns_opts.tags_only, N_("only show tags (can be combined with --branches)")),
+		OPT_BOOL(0, "branches", &patterns_opts.branches_only, N_("only show branches (can be combined with --tags)")),
+		OPT_HIDDEN_BOOL(0, "heads", &patterns_opts.branches_only,
+				N_("deprecated synonym for --branches")),
+		OPT_END(),
+	};
+
+	argc = parse_options(argc, argv, prefix, options, list_usage, 0);
+	if (argc)
+		usage(_("'git refs list' takes no arguments"));
+
+	if (patterns_opts.show_head)
+		refs_head_ref(get_main_ref_store(the_repository), show_ref,
+			      &patterns_opts);
+	if (patterns_opts.tags_only || patterns_opts.branches_only) {
+		if (patterns_opts.branches_only)
+			refs_for_each_fullref_in(get_main_ref_store(the_repository),
+					"refs/heads/", NULL, show_ref, &patterns_opts);
+
+		if (patterns_opts.tags_only)
+			refs_for_each_fullref_in(get_main_ref_store(the_repository),
+					 "refs/tags/", NULL, show_ref, &patterns_opts);
+	}
+	else refs_for_each_ref(get_main_ref_store(the_repository), show_ref, &patterns_opts);
+
+	return 0;
+}
+
 int cmd_refs(int argc,
 	     const char **argv,
 	     const char *prefix,
@@ -109,12 +169,14 @@ int cmd_refs(int argc,
 	const char * const refs_usage[] = {
 		REFS_MIGRATE_USAGE,
 		REFS_VERIFY_USAGE,
+		REFS_LIST_USAGE,
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
 	struct option opts[] = {
 		OPT_SUBCOMMAND("migrate", &fn, cmd_refs_migrate),
 		OPT_SUBCOMMAND("verify", &fn, cmd_refs_verify),
+		OPT_SUBCOMMAND("list", &fn, cmd_refs_list),
 		OPT_END(),
 	};
 
