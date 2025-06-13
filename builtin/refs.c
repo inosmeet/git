@@ -2,6 +2,9 @@
 #include "builtin.h"
 #include "config.h"
 #include "fsck.h"
+#include "hex.h"
+#include "object-name.h"
+#include "object-store.h"
 #include "parse-options.h"
 #include "refs.h"
 #include "strbuf.h"
@@ -12,6 +15,9 @@
 
 #define REFS_VERIFY_USAGE \
 	N_("git refs verify [--strict] [--verbose]")
+
+#define REFS_LIST_USAGE \
+	N_("git refs list [--head] [--branches] [--tag] [--] [<pattern>...]")
 
 static int cmd_refs_migrate(int argc, const char **argv, const char *prefix,
 			    struct repository *repo UNUSED)
@@ -101,6 +107,108 @@ static int cmd_refs_verify(int argc, const char **argv, const char *prefix,
 	return ret;
 }
 
+struct list_options {
+	unsigned int show_head;
+	unsigned int filter_branches;
+	unsigned int filter_tags;
+	unsigned int found_match;
+	const char **patterns;
+};
+
+static void print_ref(const char *refname, const struct object_id *oid)
+{
+	const char *hex;
+
+	hex = oid_to_hex(oid);
+	if (!has_object(the_repository, oid,
+			HAS_OBJECT_RECHECK_PACKED | HAS_OBJECT_FETCH_PROMISOR))
+		die("git refs list: bad ref %s (%s)", refname,
+		    hex);
+
+	printf("%s %s\n", hex, refname);
+}
+
+static int list_ref(const char *refname, const char *referent UNUSED,
+		    const struct object_id *oid, int flag UNUSED, void *cbdata)
+{
+	struct list_options *data = cbdata;
+
+	if (data->show_head && !strcmp(refname, "HEAD"))
+		goto match;
+
+	if (data->patterns) {
+		int reflen = strlen(refname);
+		const char **pattern_ptr = data->patterns, *pattern;
+		while ((pattern = *pattern_ptr++) != NULL) {
+			int pattern_len = strlen(pattern);
+			if (pattern_len > reflen)
+				continue;
+			if (memcmp(pattern, refname + reflen - pattern_len, pattern_len))
+				continue;
+			if (pattern_len == reflen)
+				goto match;
+			if (refname[reflen - pattern_len - 1] == '/')
+				goto match;
+		}
+		return 0;
+	}
+
+match:
+	data->found_match++;
+
+	print_ref(refname, oid);
+
+	return 0;
+}
+
+static int cmd_refs_list(int argc, const char **argv, const char *prefix,
+			 struct repository *repo UNUSED)
+{
+	struct list_options list_opts = {0};
+	const char * const list_usage[] = {
+		REFS_LIST_USAGE,
+		NULL,
+	};
+	struct option options[] = {
+		OPT_BOOL(0, "head", &list_opts.show_head,
+			 N_("show the HEAD reference, even if it would be filtered out")),
+		OPT_BOOL(0, "tags", &list_opts.filter_tags,
+			 N_("only show tags (can be combined with --branches)")),
+		OPT_BOOL(0, "branches", &list_opts.filter_branches,
+			 N_("only show branches (can be combined with --tags)")),
+		OPT_END(),
+	};
+
+	argc = parse_options(argc, argv, prefix, options, list_usage, 0);
+
+	if (argv && *argv)
+		list_opts.patterns = argv;
+
+	if (list_opts.show_head)
+		refs_head_ref(get_main_ref_store(the_repository), list_ref,
+			      &list_opts);
+
+	if (list_opts.filter_tags || list_opts.filter_branches) {
+		if (list_opts.filter_branches)
+			refs_for_each_fullref_in(get_main_ref_store(the_repository),
+						 "refs/heads/", NULL,
+						 list_ref, &list_opts);
+
+		if (list_opts.filter_tags)
+			refs_for_each_fullref_in(get_main_ref_store(the_repository),
+						 "refs/tags/", NULL,
+						 list_ref, &list_opts);
+	} else {
+		refs_for_each_ref(get_main_ref_store(the_repository),
+				  list_ref, &list_opts);
+	}
+
+	if (!list_opts.found_match)
+		return 1;
+
+	return 0;
+}
+
 int cmd_refs(int argc,
 	     const char **argv,
 	     const char *prefix,
@@ -109,12 +217,14 @@ int cmd_refs(int argc,
 	const char * const refs_usage[] = {
 		REFS_MIGRATE_USAGE,
 		REFS_VERIFY_USAGE,
+		REFS_LIST_USAGE,
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
 	struct option opts[] = {
 		OPT_SUBCOMMAND("migrate", &fn, cmd_refs_migrate),
 		OPT_SUBCOMMAND("verify", &fn, cmd_refs_verify),
+		OPT_SUBCOMMAND("list", &fn, cmd_refs_list),
 		OPT_END(),
 	};
 
