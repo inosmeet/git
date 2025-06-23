@@ -3,6 +3,7 @@
 #include "config.h"
 #include "fsck.h"
 #include "parse-options.h"
+#include "ref-filter.h"
 #include "refs.h"
 #include "strbuf.h"
 #include "worktree.h"
@@ -12,6 +13,15 @@
 
 #define REFS_VERIFY_USAGE \
 	N_("git refs verify [--strict] [--verbose]")
+
+#define REFS_LIST_USAGE \
+	N_("git refs list [--count=<count>] [--shell|--perl|--python|--tcl]\n" \
+	   "              [(--sort=<key>)...] [--format=<format>]\n" \
+	   "              [--include-root-refs] [ --stdin | <pattern>... ]\n" \
+	   "              [--points-at=<object>]\n" \
+	   "              [--merged[=<object>]] [--no-merged[=<object>]]\n" \
+	   "              [--contains[=<object>]] [--no-contains[=<object>]]\n" \
+	   "              [--exclude=<pattern> ...]")
 
 static int cmd_refs_migrate(int argc, const char **argv, const char *prefix,
 			    struct repository *repo UNUSED)
@@ -101,6 +111,29 @@ static int cmd_refs_verify(int argc, const char **argv, const char *prefix,
 	return ret;
 }
 
+static int cmd_refs_list(int argc, const char **argv, const char *prefix,
+		  struct repository *repo)
+{
+	struct strvec args = STRVEC_INIT;
+	const char **args_copy;
+	int ret;
+
+	strvec_push(&args, "refs list");
+
+	for (int i = 1; i < argc; i++)
+		strvec_push(&args, argv[i]);
+
+	CALLOC_ARRAY(args_copy, args.nr + 1);
+	COPY_ARRAY(args_copy, args.v, args.nr);
+
+	ret = cmd_for_each_ref(args.nr, args_copy, prefix, repo);
+
+	strvec_clear(&args);
+	free(args_copy);
+
+	return ret;
+}
+
 int cmd_refs(int argc,
 	     const char **argv,
 	     const char *prefix,
@@ -109,12 +142,14 @@ int cmd_refs(int argc,
 	const char * const refs_usage[] = {
 		REFS_MIGRATE_USAGE,
 		REFS_VERIFY_USAGE,
+		REFS_LIST_USAGE,
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
 	struct option opts[] = {
 		OPT_SUBCOMMAND("migrate", &fn, cmd_refs_migrate),
 		OPT_SUBCOMMAND("verify", &fn, cmd_refs_verify),
+		OPT_SUBCOMMAND("list", &fn, cmd_refs_list),
 		OPT_END(),
 	};
 

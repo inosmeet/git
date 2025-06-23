@@ -16,11 +16,27 @@ static char const * const for_each_ref_usage[] = {
 	NULL
 };
 
+#define REFS_LIST_USAGE \
+	N_("git refs list [--count=<count>] [--shell|--perl|--python|--tcl]\n" \
+	   "              [(--sort=<key>)...] [--format=<format>]\n" \
+	   "              [--include-root-refs] [ --stdin | <pattern>... ]\n" \
+	   "              [--points-at=<object>]\n" \
+	   "              [--merged[=<object>]] [--no-merged[=<object>]]\n" \
+	   "              [--contains[=<object>]] [--no-contains[=<object>]]\n" \
+	   "              [--exclude=<pattern> ...]")
+
+static char const * const refs_list_usage[] = {
+	REFS_LIST_USAGE,
+	NULL
+};
+
 int cmd_for_each_ref(int argc,
 		     const char **argv,
 		     const char *prefix,
 		     struct repository *repo)
 {
+	int cmd_is_refs_list = !strcmp(argv[0], "refs list");
+	const char *const *opt_usage = cmd_is_refs_list ? refs_list_usage : for_each_ref_usage;
 	struct ref_sorting *sorting;
 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
 	int icase = 0, include_root_refs = 0, from_stdin = 0;
@@ -67,17 +83,17 @@ int cmd_for_each_ref(int argc,
 	/* Set default (refname) sorting */
 	string_list_append(&sorting_options, "refname");
 
-	parse_options(argc, argv, prefix, opts, for_each_ref_usage, 0);
+	parse_options(argc, argv, prefix, opts, opt_usage, 0);
 	if (format.array_opts.max_count < 0) {
 		error("invalid --count argument: `%d'", format.array_opts.max_count);
-		usage_with_options(for_each_ref_usage, opts);
+		usage_with_options(opt_usage, opts);
 	}
 	if (HAS_MULTI_BITS(format.quote_style)) {
 		error("more than one quoting style?");
-		usage_with_options(for_each_ref_usage, opts);
+		usage_with_options(opt_usage, opts);
 	}
 	if (verify_ref_format(&format))
-		usage_with_options(for_each_ref_usage, opts);
+		usage_with_options(opt_usage, opts);
 
 	sorting = ref_sorting_options(&sorting_options);
 	ref_sorting_set_sort_flags_all(sorting, REF_SORTING_ICASE, icase);
