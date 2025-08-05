@@ -57,6 +57,10 @@ The following options are specific to 'git refs verify':
 --verbose::
 	When verifying the reference database consistency, be chatty.
 
+The following options are specific to 'git refs list':
+
+include::for-each-ref-options.adoc[]
+
 KNOWN LIMITATIONS
 -----------------
 
