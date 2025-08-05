@@ -170,7 +170,7 @@ static void load_gc_recent_objects(struct recent_data *data)
 
 	data->extra_recent_oids_loaded = 1;
 
-	if (git_config_get_string_multi("gc.recentobjectshook", &programs))
+	if (repo_config_get_string_multi(the_repository, "gc.recentobjectshook", &programs))
 		return;
 
 	for (i = 0; i < programs->nr; i++) {
@@ -211,7 +211,7 @@ static void add_recent_object(const struct object_id *oid,
 	 * later processing, and the revision machinery expects
 	 * commits and tags to have been parsed.
 	 */
-	type = oid_object_info(the_repository, oid, NULL);
+	type = odb_read_object_info(the_repository->objects, oid, NULL);
 	if (type < 0)
 		die("unable to get object info for %s", oid_to_hex(oid));
 

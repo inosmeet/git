@@ -7,7 +7,7 @@
 #include "hex.h"
 #include "object-file.h"
 #include "object-name.h"
-#include "object-store.h"
+#include "odb.h"
 #include "config.h"
 #include "gettext.h"
 #include "setup.h"
@@ -97,7 +97,7 @@ int cmd_merge_file(int argc,
 
 	if (startup_info->have_repository) {
 		/* Read the configuration file */
-		git_config(git_xmerge_config, NULL);
+		repo_config(the_repository, git_xmerge_config, NULL);
 		if (0 <= git_xmerge_style)
 			xmp.style = git_xmerge_style;
 	}

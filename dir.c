@@ -302,7 +302,7 @@ static int do_read_blob(const struct object_id *oid, struct oid_stat *oid_stat,
 	*size_out = 0;
 	*data_out = NULL;
 
-	data = repo_read_object_file(the_repository, oid, &type, &sz);
+	data = odb_read_object(the_repository->objects, oid, &type, &sz);
 	if (!data || type != OBJ_BLOB) {
 		free(data);
 		return -1;
@@ -4091,8 +4091,8 @@ void connect_work_tree_and_git_dir(const char *work_tree_,
 	write_file(gitfile_sb.buf, "gitdir: %s",
 		   relative_path(git_dir, work_tree, &rel_path));
 	/* Update core.worktree setting */
-	git_config_set_in_file(cfg_sb.buf, "core.worktree",
-			       relative_path(work_tree, git_dir, &rel_path));
+	repo_config_set_in_file(the_repository, cfg_sb.buf, "core.worktree",
+				relative_path(work_tree, git_dir, &rel_path));
 
 	strbuf_release(&gitfile_sb);
 	strbuf_release(&cfg_sb);

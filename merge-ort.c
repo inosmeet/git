@@ -39,7 +39,7 @@
 #include "mem-pool.h"
 #include "object-file.h"
 #include "object-name.h"
-#include "object-store.h"
+#include "odb.h"
 #include "oid-array.h"
 #include "path.h"
 #include "promisor-remote.h"
@@ -3629,7 +3629,7 @@ static int read_oid_strbuf(struct merge_options *opt,
 	void *buf;
 	enum object_type type;
 	unsigned long size;
-	buf = repo_read_object_file(the_repository, oid, &type, &size);
+	buf = odb_read_object(the_repository->objects, oid, &type, &size);
 	if (!buf) {
 		path_msg(opt, ERROR_OBJECT_READ_FAILED, 0,
 			 path, NULL, NULL, NULL,
@@ -4385,8 +4385,8 @@ static void prefetch_for_content_merges(struct merge_options *opt,
 
 			if ((ci->filemask & side_mask) &&
 			    S_ISREG(vi->mode) &&
-			    oid_object_info_extended(opt->repo, &vi->oid, NULL,
-						     OBJECT_INFO_FOR_PREFETCH))
+			    odb_read_object_info_extended(opt->repo->objects, &vi->oid, NULL,
+							  OBJECT_INFO_FOR_PREFETCH))
 				oid_array_append(&to_fetch, &vi->oid);
 		}
 	}
@@ -5353,20 +5353,20 @@ static void merge_recursive_config(struct merge_options *opt, int ui)
 {
 	char *value = NULL;
 	int renormalize = 0;
-	git_config_get_int("merge.verbosity", &opt->verbosity);
-	git_config_get_int("diff.renamelimit", &opt->rename_limit);
-	git_config_get_int("merge.renamelimit", &opt->rename_limit);
-	git_config_get_bool("merge.renormalize", &renormalize);
+	repo_config_get_int(the_repository, "merge.verbosity", &opt->verbosity);
+	repo_config_get_int(the_repository, "diff.renamelimit", &opt->rename_limit);
+	repo_config_get_int(the_repository, "merge.renamelimit", &opt->rename_limit);
+	repo_config_get_bool(the_repository, "merge.renormalize", &renormalize);
 	opt->renormalize = renormalize;
-	if (!git_config_get_string("diff.renames", &value)) {
+	if (!repo_config_get_string(the_repository, "diff.renames", &value)) {
 		opt->detect_renames = git_config_rename("diff.renames", value);
 		free(value);
 	}
-	if (!git_config_get_string("merge.renames", &value)) {
+	if (!repo_config_get_string(the_repository, "merge.renames", &value)) {
 		opt->detect_renames = git_config_rename("merge.renames", value);
 		free(value);
 	}
-	if (!git_config_get_string("merge.directoryrenames", &value)) {
+	if (!repo_config_get_string(the_repository, "merge.directoryrenames", &value)) {
 		int boolval = git_parse_maybe_bool(value);
 		if (0 <= boolval) {
 			opt->detect_directory_renames = boolval ?
@@ -5379,7 +5379,7 @@ static void merge_recursive_config(struct merge_options *opt, int ui)
 		free(value);
 	}
 	if (ui) {
-		if (!git_config_get_string("diff.algorithm", &value)) {
+		if (!repo_config_get_string(the_repository, "diff.algorithm", &value)) {
 			long diff_algorithm = parse_algorithm_value(value);
 			if (diff_algorithm < 0)
 				die(_("unknown value for config '%s': %s"), "diff.algorithm", value);
@@ -5387,7 +5387,7 @@ static void merge_recursive_config(struct merge_options *opt, int ui)
 			free(value);
 		}
 	}
-	git_config(git_xmerge_config, NULL);
+	repo_config(the_repository, git_xmerge_config, NULL);
 }
 
 static void init_merge_options(struct merge_options *opt,

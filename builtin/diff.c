@@ -483,10 +483,10 @@ int cmd_diff(int argc,
 	 * configurable via a command line option.
 	 */
 	if (nongit)
-		repo_set_hash_algo(the_repository, GIT_HASH_SHA1);
+		repo_set_hash_algo(the_repository, GIT_HASH_DEFAULT);
 
 	init_diff_ui_defaults();
-	git_config(git_diff_ui_config, NULL);
+	repo_config(the_repository, git_diff_ui_config, NULL);
 	prefix = precompose_argv_prefix(argc, argv, prefix);
 
 	repo_init_revisions(the_repository, &rev, prefix);

@@ -13,7 +13,7 @@
 #include "dir.h"
 #include "object-file.h"
 #include "object-name.h"
-#include "object-store.h"
+#include "odb.h"
 #include "object.h"
 #include "pager.h"
 #include "commit.h"
@@ -327,7 +327,7 @@ static int git_sequencer_config(const char *k, const char *v,
 void sequencer_init_config(struct replay_opts *opts)
 {
 	opts->default_msg_cleanup = COMMIT_MSG_CLEANUP_NONE;
-	git_config(git_sequencer_config, opts);
+	repo_config(the_repository, git_sequencer_config, opts);
 }
 
 static inline int is_rebase_i(const struct replay_opts *opts)
@@ -3650,57 +3650,57 @@ static int save_opts(struct replay_opts *opts)
 	int res = 0;
 
 	if (opts->no_commit)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.no-commit", NULL, "true");
 	if (opts->edit >= 0)
-		res |= git_config_set_in_file_gently(opts_file, "options.edit", NULL,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file, "options.edit", NULL,
 						     opts->edit ? "true" : "false");
 	if (opts->allow_empty)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.allow-empty", NULL, "true");
 	if (opts->allow_empty_message)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 				"options.allow-empty-message", NULL, "true");
 	if (opts->drop_redundant_commits)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 				"options.drop-redundant-commits", NULL, "true");
 	if (opts->keep_redundant_commits)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 				"options.keep-redundant-commits", NULL, "true");
 	if (opts->signoff)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.signoff", NULL, "true");
 	if (opts->record_origin)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.record-origin", NULL, "true");
 	if (opts->allow_ff)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.allow-ff", NULL, "true");
 	if (opts->mainline) {
 		struct strbuf buf = STRBUF_INIT;
 		strbuf_addf(&buf, "%d", opts->mainline);
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.mainline", NULL, buf.buf);
 		strbuf_release(&buf);
 	}
 	if (opts->strategy)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.strategy", NULL, opts->strategy);
 	if (opts->gpg_sign)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.gpg-sign", NULL, opts->gpg_sign);
 	for (size_t i = 0; i < opts->xopts.nr; i++)
-		res |= git_config_set_multivar_in_file_gently(opts_file,
+		res |= repo_config_set_multivar_in_file_gently(the_repository, opts_file,
 				"options.strategy-option",
 				opts->xopts.v[i], "^$", NULL, 0);
 	if (opts->allow_rerere_auto)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 				"options.allow-rerere-auto", NULL,
 				opts->allow_rerere_auto == RERERE_AUTOUPDATE ?
 				"true" : "false");
 
 	if (opts->explicit_cleanup)
-		res |= git_config_set_in_file_gently(opts_file,
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 				"options.default-msg-cleanup", NULL,
 				describe_cleanup_mode(opts->default_msg_cleanup));
 	return res;
@@ -5505,9 +5505,8 @@ int sequencer_pick_revisions(struct repository *r,
 
 		if (!repo_get_oid(r, name, &oid)) {
 			if (!lookup_commit_reference_gently(r, &oid, 1)) {
-				enum object_type type = oid_object_info(r,
-									&oid,
-									NULL);
+				enum object_type type = odb_read_object_info(r->objects,
+									     &oid, NULL);
 				res = error(_("%s: can't cherry-pick a %s"),
 					    name, type_name(type));
 				goto out;
@@ -5835,7 +5834,7 @@ static int make_script_with_merges(struct pretty_print_context *pp,
 		*cmd_reset = abbr ? "t" : "reset",
 		*cmd_merge = abbr ? "m" : "merge";
 
-	git_config_get_int("rebase.maxlabellength", &state.max_label_length);
+	repo_config_get_int(the_repository, "rebase.maxlabellength", &state.max_label_length);
 
 	oidmap_init(&commit2todo, 0);
 	oidmap_init(&state.commit2label, 0);
@@ -6090,7 +6089,7 @@ int sequencer_make_script(struct repository *r, struct strbuf *out, int argc,
 	revs.topo_order = 1;
 
 	revs.pretty_given = 1;
-	git_config_get_string("rebase.instructionFormat", &format);
+	repo_config_get_string(the_repository, "rebase.instructionFormat", &format);
 	if (!format || !*format) {
 		free(format);
 		format = xstrdup("# %s");
