@@ -2,19 +2,16 @@
 #include "config.h"
 #include "environment.h"
 #include "gettext.h"
+#include "pack-refs.h"
 #include "parse-options.h"
 #include "refs.h"
 #include "revision.h"
 
-static char const * const pack_refs_usage[] = {
-	N_("git pack-refs [--all] [--no-prune] [--auto] [--include <pattern>] [--exclude <pattern>]"),
-	NULL
-};
-
-int cmd_pack_refs(int argc,
-		  const char **argv,
-		  const char *prefix,
-		  struct repository *repo)
+int pack_refs_core(int argc,
+		   const char **argv,
+		   const char *prefix,
+		   struct repository *repo,
+		   const char * const *usage_opts)
 {
 	struct ref_exclusions excludes = REF_EXCLUSIONS_INIT;
 	struct string_list included_refs = STRING_LIST_INIT_NODUP;
@@ -39,8 +36,8 @@ int cmd_pack_refs(int argc,
 		OPT_END(),
 	};
 	repo_config(repo, git_default_config, NULL);
-	if (parse_options(argc, argv, prefix, opts, pack_refs_usage, 0))
-		usage_with_options(pack_refs_usage, opts);
+	if (parse_options(argc, argv, prefix, opts, usage_opts, 0))
+		usage_with_options(usage_opts, opts);
 
 	for_each_string_list_item(item, &option_excluded_refs)
 		add_ref_exclusion(pack_refs_opts.exclusions, item->string);
@@ -57,4 +54,16 @@ int cmd_pack_refs(int argc,
 	string_list_clear(&included_refs, 0);
 	string_list_clear(&option_excluded_refs, 0);
 	return ret;
+}
+
+int cmd_pack_refs(int argc,
+		  const char **argv,
+		  const char *prefix,
+		  struct repository *repo)
+{
+	static char const * const pack_refs_usage[] = {
+		N_("git pack-refs " PACK_REFS_OPTS),
+		NULL
+	};
+	return pack_refs_core(argc, argv, prefix, repo, pack_refs_usage);
 }
