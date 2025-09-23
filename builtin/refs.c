@@ -2,6 +2,7 @@
 #include "builtin.h"
 #include "config.h"
 #include "fsck.h"
+#include "hex.h"
 #include "parse-options.h"
 #include "refs.h"
 #include "strbuf.h"
@@ -17,6 +18,9 @@
 
 #define REFS_EXISTS_USAGE \
 	N_("git refs exists <ref>")
+
+#define REFS_GET_USAGE \
+	N_("git refs get <ref>")
 
 static int cmd_refs_migrate(int argc, const char **argv, const char *prefix,
 			    struct repository *repo UNUSED)
@@ -159,6 +163,43 @@ out:
 	return ret;
 }
 
+static int cmd_refs_get(int argc, const char **argv, const char *prefix,
+			struct repository *repo UNUSED)
+{
+	const char *refname;
+	struct object_id oid;
+	unsigned int type;
+	int failure_errno = 0;
+	struct strbuf referent = STRBUF_INIT;
+
+	const char * const exists_usage[] = {
+		REFS_EXISTS_USAGE,
+		NULL,
+	};
+	struct option options[] = {
+		OPT_END(),
+	};
+
+	argc = parse_options(argc, argv, prefix, options, exists_usage, 0);
+	if (argc != 1)
+		die("refs get requires exactly one reference");
+
+	refname = *argv++;
+	if (refs_read_raw_ref(get_main_ref_store(the_repository), refname,
+			      &oid, &referent, &type, &failure_errno)) {
+		die("'%s' - not a valid ref", refname);
+	}
+
+	if (type & REF_ISSYMREF) {
+		printf("ref: %s\n", referent.buf);
+	} else {
+		printf("%s\n", oid_to_hex(&oid));
+	}
+
+	strbuf_release(&referent);
+	return 0;
+}
+
 int cmd_refs(int argc,
 	     const char **argv,
 	     const char *prefix,
@@ -169,6 +210,7 @@ int cmd_refs(int argc,
 		REFS_VERIFY_USAGE,
 		"git refs list " COMMON_USAGE_FOR_EACH_REF,
 		REFS_EXISTS_USAGE,
+		REFS_GET_USAGE,
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
@@ -177,6 +219,7 @@ int cmd_refs(int argc,
 		OPT_SUBCOMMAND("verify", &fn, cmd_refs_verify),
 		OPT_SUBCOMMAND("list", &fn, cmd_refs_list),
 		OPT_SUBCOMMAND("exists", &fn, cmd_refs_exists),
+		OPT_SUBCOMMAND("get", &fn, cmd_refs_get),
 		OPT_END(),
 	};
 

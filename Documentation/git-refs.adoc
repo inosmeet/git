@@ -19,6 +19,7 @@ git refs list [--count=<count>] [--shell|--perl|--python|--tcl]
 		   [(--exclude=<pattern>)...] [--start-after=<marker>]
 		   [ --stdin | (<pattern>...)]
 git refs exists <ref>
+git refs get <ref>
 
 DESCRIPTION
 -----------
@@ -44,6 +45,12 @@ exists::
 	it does, 2 if it is missing, and 1 in case looking up the reference
 	failed with an error other than the reference being missing. This does
 	not verify whether the reference resolves to an actual object.
+
+get::
+	Reads the raw value of a single, exact reference. Instead of
+	recursively dereferencing symbolic references, this command prints the
+	direct target of the symref (e.g., ref: refs/heads/main). For regular
+	references, it prints the object ID (SHA-1) they point to.
 
 OPTIONS
 -------
